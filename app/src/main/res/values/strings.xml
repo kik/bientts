@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">bientts</string>
+    <string name="general_settings">General settings</string>
+    <string name="whisper_title">Whisper utterances</string>
+    <string name="whisper_summary">Say stuff really softly, only the keenest
+      eared robots can understand.</string>
 </resources>
