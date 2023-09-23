@@ -20,8 +20,8 @@ public class GetSampleText extends Activity {
         Intent i = getIntent();
         String language = i.getExtras().getString("language");
 
-        if (language.equals("en")) {
-            returnData.putExtra("sampleText", "abcdefghi");
+        if (language.equals("ja")) {
+            returnData.putExtra("sampleText", "これはサンプルテキストです");
         } else {
             result = TextToSpeech.LANG_NOT_SUPPORTED;
             returnData.putExtra("sampleText", "");

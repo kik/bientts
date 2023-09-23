@@ -12,13 +12,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/*
- * Checks if the voice data is present.
- */
 public class CheckVoiceData extends Activity {
     private static final String TAG = "CheckVoiceData";
 
-    private static final String[] SUPPORTED_LANGUAGES = { "eng-GBR", "eng-USA" };
+    private static final String[] SUPPORTED_LANGUAGES = { "jpn-JPN" };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,6 +113,7 @@ public class CheckVoiceData extends Activity {
      * this check would make much more sense.
      */
     private boolean isDataInstalled(String lang) {
+        /*
         try {
             InputStream is = getAssets().open(lang + ".freq");
 
@@ -131,6 +129,7 @@ public class CheckVoiceData extends Activity {
 
         // The asset InputStream was non null, and therefore this
         // data file is available.
+         */
         return true;
     }
 }

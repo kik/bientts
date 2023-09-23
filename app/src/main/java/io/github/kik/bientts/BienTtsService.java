@@ -10,6 +10,7 @@ import android.speech.tts.TextToSpeechService;
 import android.util.Log;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -18,6 +19,13 @@ import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
 
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class BienTtsService extends TextToSpeechService {
     private static final String TAG = "ExampleTtsService";
 
@@ -25,7 +33,7 @@ public class BienTtsService extends TextToSpeechService {
      * This is the sampling rate of our output audio. This engine outputs
      * audio at 16khz 16bits per sample PCM audio.
      */
-    private static final int SAMPLING_RATE_HZ = 16000;
+    private static final int SAMPLING_RATE_HZ = 24000;
 
     /*
      * We multiply by a factor of two since each sample contains 16 bits (2 bytes).
@@ -46,7 +54,7 @@ public class BienTtsService extends TextToSpeechService {
         // required though, it can always be loaded lazily on the first call to
         // onLoadLanguage or onSynthesizeText. This a tradeoff between memory usage
         // and the latency of the first call.
-        onLoadLanguage("eng", "usa", "");
+        onLoadLanguage("jpn", "JPN", "");
     }
 
     @Override
@@ -63,24 +71,12 @@ public class BienTtsService extends TextToSpeechService {
 
     @Override
     protected int onIsLanguageAvailable(String lang, String country, String variant) {
-        // The robot speak synthesizer supports only english.
-        if ("eng".equals(lang)) {
-            // We support two specific robot languages, the british robot language
-            // and the american robot language.
-            if ("USA".equals(country) || "GBR".equals(country)) {
-                // If the engine supported a specific variant, we would have
-                // something like.
-                //
-                // if ("android".equals(variant)) {
-                //     return TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE;
-                // }
+        if ("jpn".equals(lang)) {
+            if ("JPN".equals(country)) {
                 return TextToSpeech.LANG_COUNTRY_AVAILABLE;
             }
-
-            // We support the language, but not the country.
             return TextToSpeech.LANG_AVAILABLE;
         }
-
         return TextToSpeech.LANG_NOT_SUPPORTED;
     }
 
@@ -99,7 +95,7 @@ public class BienTtsService extends TextToSpeechService {
 
         String loadCountry = country;
         if (isLanguageAvailable == TextToSpeech.LANG_AVAILABLE) {
-            loadCountry = "USA";
+            loadCountry = "JPN";
         }
 
         // If we've already loaded the requested language, we can return early.
@@ -109,6 +105,7 @@ public class BienTtsService extends TextToSpeechService {
             }
         }
 
+        /*
         Map<Character, Integer> newFrequenciesMap = null;
         try {
             InputStream file = getAssets().open(lang + "-" + loadCountry + ".freq");
@@ -119,6 +116,7 @@ public class BienTtsService extends TextToSpeechService {
         }
 
         mFrequenciesMap = newFrequenciesMap;
+         */
         mCurrentLanguage = new String[] { lang, loadCountry, ""};
 
         return isLanguageAvailable;
@@ -156,58 +154,47 @@ public class BienTtsService extends TextToSpeechService {
         // We then scan through each character of the request string and
         // generate audio for it.
         final String text = request.getText().toLowerCase();
-        for (int i = 0; i < text.length(); ++i) {
-            char value = normalize(text.charAt(i));
-            // It is crucial to call either of callback.error() or callback.done() to ensure
-            // that audio / other resources are released as soon as possible.
-            if (!generateOneSecondOfAudio(value, callback)) {
-                callback.error();
-                return;
-            }
-        }
 
-        // Alright, we're done with our synthesis - yay!
+        HttpUrl baseUrl = HttpUrl.parse("https://08a3-2400-4050-afe0-3700-4c5c-9ba4-72c9-3674.ngrok-free.app");
+        OkHttpClient client = new OkHttpClient();
+        String speakerId = "26";
+
+        Request r = new Request.Builder()
+                .url(baseUrl.newBuilder()
+                        .addPathSegment("audio_query")
+                        .addQueryParameter("speaker", speakerId)
+                        .addQueryParameter("text", text)
+                        .build())
+                .post(RequestBody.create("", null))
+                .build();
+        try (Response response = client.newCall(r).execute()) {
+            String audio = response.body().string();
+
+            Request r2 = new Request.Builder()
+                    .url(baseUrl.newBuilder()
+                            .addPathSegment("synthesis")
+                            .addQueryParameter("speaker", speakerId)
+                            .build())
+                    .post(RequestBody.create(audio, MediaType.parse("application/json")))
+                    .build();
+            try (Response response2 = client.newCall(r2).execute()) {
+                byte[] bs = response2.body().bytes();
+                int max = callback.getMaxBufferSize();
+                int offset = 44;
+                while (offset < bs.length) {
+                    int len = Math.min(max, bs.length - offset);
+                    callback.audioAvailable(bs, offset, len);
+                    offset += len;
+                }
+            }
+        } catch (IOException ioe) {
+            callback.error();
+            return;
+        }
         callback.done();
     }
 
     /*
-     * Normalizes a given character to the range 'a' - 'z' (inclusive). Our
-     * frequency mappings contain frequencies for each of these characters.
-     */
-    private static char normalize(char input) {
-        if (input == ' ') {
-            return input;
-        }
-
-        if (input < 'a') {
-            return 'a';
-        }
-        if (input > 'z') {
-            return 'z';
-        }
-
-        return input;
-    }
-
-    private Map<Character, Integer> buildFrequencyMap(InputStream is) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(is));
-        String line = null;
-        Map<Character, Integer> map = new HashMap<Character, Integer>();
-        try {
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length != 2) {
-                    throw new IOException("Invalid line encountered: " + line);
-                }
-                map.put(parts[0].charAt(0), Integer.parseInt(parts[1]));
-            }
-            map.put(' ', 0);
-            return map;
-        } finally {
-            is.close();
-        }
-    }
-
     private boolean generateOneSecondOfAudio(char alphabet, SynthesisCallback cb) {
         ByteBuffer buffer = ByteBuffer.wrap(mAudioBuffer).order(ByteOrder.LITTLE_ENDIAN);
 
@@ -262,10 +249,11 @@ public class BienTtsService extends TextToSpeechService {
             offset += bytesToWrite;
         }
         return true;
-    }
+    }*/
 
+    /*
     private short getAmplitude() {
         boolean whisper = mSharedPrefs.getBoolean(GeneralSettingsFragment.WHISPER_KEY, false);
         return (short) (whisper ? 2048 : 8192);
-    }
+    }*/
 }
